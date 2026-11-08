@@ -1,6 +1,6 @@
 # SWOT project review
 
-Reviewed tree: `master` at `79487f8a` (2026-11-09). Line numbers below refer to that tree, before the follow-up fix commit.
+Reviewed tree: `master` at `79487f8a`, committed 28 June 2018. Line numbers below refer to that tree, before the follow-up fix commit.
 
 SWOT decides whether an email address belongs to a school. JetBrains uses that decision for free student and teacher licenses. `lib/domains` holds about 11,200 institution files. `src/swot/Swot.kt` is the checker. `src/swot/Compiler.kt` flattens the same tree into `out/artifacts/swot.txt` for callers that do not want the file tree.
 
@@ -159,7 +159,7 @@ Severity: medium. Fix.
 
 There is no Gradle, Maven, or Ant build. `swot.iml` is an IntelliJ module: production sources in `src`, resources in `lib/domains`, tests in `test`, Kotlin from `$KOTLIN_BUNDLED$/lib/kotlin-runtime.jar` (the pre-stdlib jar name), and JUnit from `lib/junit-4.10.jar`. `.document` still lists Ruby paths (`lib/**/*.rb`, `features/**/*.feature`) from the original port. `VERSION` is `0.3.1` with no release tooling.
 
-The follow-up adds a Gradle build that compiles `src`, puts `lib/domains` on the classpath, and runs the JUnit 4 tests on the JDK that is already installed. The IntelliJ module and the checked-in JUnit jar stay, so the existing run configuration keeps working.
+The follow-up adds a Gradle build that compiles `src`, puts `lib/domains` on the classpath, and runs the JUnit 4 tests. The IntelliJ module and the checked-in JUnit jar stay.
 
 ## Left as they are
 
@@ -171,15 +171,22 @@ The follow-up adds a Gradle build that compiles `src`, puts `lib/domains` on the
 
 **Duplicate official names across domains.** The same title opens hundreds of files (Arab Open University, a university system listed once per campus, and so on). Most of those are the same institution on more than one domain. The Strathclyde line was the one that is a different institution pasted into the wrong file.
 
-## What the follow-up changes
+## Follow-up applied on this branch
 
-The next commit on this branch:
+The fix commit:
 
-- Folds case with `Locale.ROOT`, takes the host from a URL instead of the first `@`, and accepts angle-bracket addresses and a single trailing dot.
-- Rejects a host with a label exactly `alumni`.
-- Reads domain files as UTF-8, closes them, preserves official-name order, and ignores blank lines and `.group`.
-- Compiles only lowercase `.txt` domains, skips `tlds.txt` and `blacklist.txt`, and emits parents before children.
-- Repairs the Strathclyde, Viadrina, and Konrad Lorenz files; re-encodes the 27 legacy name files; lowercases the mixed-case paths; renames the emlyon and CET files; removes the duplicate IJburg file, the duplicate `DBU.txt`, and the empty `dtmik.tj`.
-- Adds Gradle and tests for the locale, the URL host, alumni mail, the Strathclyde name, the `.group` marker, and the compiler.
+- Folds case with `Locale.ROOT`. A URL contributes its host, so a path is no longer part of the label and an `@` in the query cannot redirect the decision. Angle-bracket addresses and a single trailing DNS dot match.
+- Rejects a host with a label exactly `alumni`. `esat-alumni.com` still matches. `swot.txt` is unchanged as a format, so a consumer of that file alone still accepts `alumni.stanford.edu` through the `edu` suffix.
+- Reads domain files as UTF-8, closes the stream, keeps official-name order, drops a leading BOM, drops blank lines and an exact `.group` line, and collapses duplicate lines. `lib/domains/ru/spbu.txt` lists "St. Petersburg State University" twice; the old `HashSet` hid that, and `.single()` in the existing test depends on it.
+- Compiles only lowercase `.txt` domains, skips `tlds.txt` and `blacklist.txt`, and visits parents before children.
+- Removes the stray Tarsadia line from Strathclyde. Writes the Viadrina name into `europa-uni.de` and the Konrad Lorenz name into `konradlorenz.edu.co`. Re-encodes the 27 legacy name files. Lowercases the mixed-case paths. Renames the emlyon and CET files. Removes the duplicate extensionless IJburg file, the duplicate `edu/DBU.txt`, and the empty `lib/domains/tj/dtmik.tj`.
+- Adds `./gradlew test`, plus tests for the locale, the URL host, alumni mail, the repaired names, the `.group` marker, and the compiler, including a pass over the checked-in tree.
 
-`bcps.org` and `kansaigaidai.jp` stop matching. `edu.emlyon.com` starts matching. The mixed-case domains in item 6 start matching. `netocentre.fr` disappears from the compiled list and still does not match in `isAcademic`.
+`./gradlew test` passes: 7 tests in `SwotTest`, 2 in `CompilerTest`.
+
+Eligibility changes, on purpose:
+
+- `bcps.org` and `kansaigaidai.jp` stop matching. Both files are still only a newline.
+- `edu.emlyon.com` starts matching.
+- The mixed-case domains in item 6 start matching. `dbu.edu` and `fondazionejac.edu` already matched through `edu`; their names now resolve.
+- `netocentre.fr` is gone from the compiled list. `isAcademic` still rejects it. The extensionless file is still on disk.
